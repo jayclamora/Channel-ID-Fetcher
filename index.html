@@ -1,105 +1,142 @@
-import React, { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Table } from "@/components/ui/table";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Channel Info Lookup</title>
+    <script>
+        const apiKey = "AIzaSyDKcrLqU7_SEg63J8rg8FS9QchfKb-VBUU";
 
-const API_KEY = "AIzaSyDKcrLqU7_SEg63J8rg8FS9QchfKb-VBUU";
+        async function fetchChannelData(channelIds) {
+            const baseUrl = "https://www.googleapis.com/youtube/v3/channels";
+            const params = new URLSearchParams({
+                part: "snippet,statistics",
+                id: channelIds.join(","),
+                key: apiKey,
+            });
 
-export default function YouTubeChannelLookup() {
-  const [channelIds, setChannelIds] = useState("");
-  const [channels, setChannels] = useState([]);
+            try {
+                const response = await fetch(`${baseUrl}?${params}`);
+                if (!response.ok) {
+                    throw new Error("Failed to fetch channel data.");
+                }
+                return await response.json();
+            } catch (error) {
+                console.error(error);
+                alert("Error fetching channel data. Please check your input or try again later.");
+            }
+        }
 
-  const fetchChannelDetails = async (id) => {
-    try {
-      const response = await fetch(
-        `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${id}&key=${API_KEY}`
-      );
-      const data = await response.json();
+        function displayResults(data) {
+            const tableBody = document.getElementById("results-body");
+            tableBody.innerHTML = ""; // Clear previous results
 
-      if (data.items && data.items.length > 0) {
-        const channel = data.items[0];
-        return {
-          id: channel.id,
-          name: channel.snippet.title,
-          subscribers: channel.statistics.subscriberCount,
-        };
-      }
-    } catch (error) {
-      console.error("Error fetching channel details:", error);
-    }
-    return null;
-  };
+            data.items.forEach((item) => {
+                const row = document.createElement("tr");
 
-  const handleManualSearch = async () => {
-    const ids = channelIds
-      .split(/\r?\n/)
-      .map((id) => id.trim())
-      .filter((id) => id !== "")
-      .slice(0, 1000);
+                const channelIdCell = document.createElement("td");
+                channelIdCell.textContent = item.id;
 
-    const details = await Promise.all(ids.map((id) => fetchChannelDetails(id)));
-    setChannels((prev) => [...prev, ...details.filter((d) => d !== null)]);
-    setChannelIds("");
-  };
+                const channelNameCell = document.createElement("td");
+                channelNameCell.textContent = item.snippet.title;
 
-  const handleCsvUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+                const subscriberCountCell = document.createElement("td");
+                subscriberCountCell.textContent = item.statistics.subscriberCount;
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target.result;
-      const ids = text.split(/\r?\n/).filter((id) => id.trim() !== "");
+                row.appendChild(channelIdCell);
+                row.appendChild(channelNameCell);
+                row.appendChild(subscriberCountCell);
 
-      const details = await Promise.all(ids.map((id) => fetchChannelDetails(id)));
-      setChannels((prev) => [...prev, ...details.filter((d) => d !== null)]);
-    };
-    reader.readAsText(file);
-  };
+                tableBody.appendChild(row);
+            });
+        }
 
-  return (
-    <div className="p-4">
-      <Card>
-        <CardContent>
-          <div className="flex flex-col gap-4">
-            <div>
-              <label className="block mb-2">Enter Channel IDs (one per line, max 1000):</label>
-              <Textarea
-                rows={10}
-                placeholder="Enter one Channel ID per line"
-                value={channelIds}
-                onChange={(e) => setChannelIds(e.target.value)}
-              />
-              <Button className="mt-2" onClick={handleManualSearch}>Search</Button>
-            </div>
+        async function handleManualInput() {
+            const inputBox = document.getElementById("manual-input");
+            const channelIds = inputBox.value.split("\n").map(id => id.trim()).filter(id => id);
 
-            <div>
-              <label className="block mb-2">Upload CSV File:</label>
-              <Input type="file" accept=".csv" onChange={handleCsvUpload} />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            if (channelIds.length > 1000) {
+                alert("Limit is 1000 channel IDs at a time.");
+                return;
+            }
 
-      <Table className="mt-6">
-        <thead>
-          <tr>
-            <th>Channel ID</th>
-            <th>Channel Name</th>
-            <th>Subscriber Count</th>
-          </tr>
-        </thead>
-        <tbody>
-          {channels.map((channel, index) => (
-            <tr key={index}>
-              <td>{channel.id}</td>
-              <td>{channel.name}</td>
-              <td>{channel.subscribers}</td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
+            const data = await fetchChannelData(channelIds);
+            if (data) {
+                displayResults(data);
+            }
+        }
+
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function (e) {
+                const content = e.target.result;
+                const channelIds = content.split("\n").map(id => id.trim()).filter(id => id);
+
+                if (channelIds.length > 1000) {
+                    alert("Limit is 1000 channel IDs at a time.");
+                    return;
+                }
+
+                const data = await fetchChannelData(channelIds);
+                if (data) {
+                    displayResults(data);
+                }
+            };
+
+            reader.readAsText(file);
+        }
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table, th, td {
+            border: 1px solid black;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+    <h1>YouTube Channel Info Lookup</h1>
+    <div>
+        <h3>Manual Input</h3>
+        <textarea id="manual-input" rows="10" cols="50" placeholder="Enter YouTube Channel IDs, one per line"></textarea><br>
+        <button onclick="handleManualInput()">Fetch Channel Info</button>
     </div>
-  );
-}
+
+    <div>
+        <h3>Upload CSV File</h3>
+        <input type="file" accept=".csv" onchange="handleFileUpload(event)" />
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Channel ID</th>
+                <th>Channel Name</th>
+                <th>Subscriber Count</th>
+            </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+    </table>
+</body>
+</html>
